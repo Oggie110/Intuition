@@ -12,6 +12,19 @@ This repository contains a minimal email-driven project management helper writte
   4. ignore all future emails from the sender.
 - Keep the raw email file so you can refer back to the original content later.
 - List projects, inspect tracked emails, and surface snoozed emails whose reminders are due.
+- Triage everything from a lightweight Flask-powered web dashboard.
+
+## Getting started
+
+1. **Install Python 3.10+** (the CLI only relies on the standard library).
+2. (Optional) Set a custom storage directory by exporting `PROJECT_MANAGER_HOME=/path/to/storage`. Otherwise data lives in `~/.project_manager/`.
+3. Install the optional Flask dependency if you want the browser UI:
+
+   ```bash
+   pip install flask
+   ```
+
+4. Run the CLI through the module entry point:
 
 ## Getting started
 
@@ -49,6 +62,16 @@ The first command invocation initializes the SQLite database and required folder
    ```
 
 Raw emails are copied to `<storage>/raw_emails/` for future reference.
+
+## Web interface
+
+Prefer point-and-click triage? Start the Flask dev server and visit the dashboard:
+
+```bash
+python -m project_manager.web
+```
+
+Then open <http://127.0.0.1:5000/>. From there you can upload `.eml` files, assign them to existing projects, create a new project on the fly, snooze decisions for a later date, or ignore a sender entirely. The projects tab lists every project and lets you add new ones outside the email flow.
 
 ## Future directions
 
