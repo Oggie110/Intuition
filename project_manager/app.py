@@ -3,7 +3,7 @@ from __future__ import annotations
 
 import shutil
 from dataclasses import dataclass
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timedelta, UTC
 from pathlib import Path
 from typing import Iterable, Optional
 
@@ -155,11 +155,11 @@ class ProjectManager:
         with database.db_session() as conn:
             rows = conn.execute(
                 """
-                SELECT * FROM emails
-                WHERE status = 'snoozed'
-                  AND remind_at IS NOT NULL
-                  AND datetime(remind_at) <= datetime('now')
-                ORDER BY remind_at
+SELECT * FROM emails
+WHERE status = 'snoozed'
+  AND remind_at IS NOT NULL
+  AND datetime(remind_at) <= datetime('now')
+ORDER BY datetime(remind_at)
                 """
             ).fetchall()
         return [_row_to_email(row) for row in rows]
@@ -250,7 +250,8 @@ def _handle_snooze(manager: ProjectManager, email: EmailEntry) -> None:
         choice = input("Select reminder interval: ").strip()
         if choice in REMINDER_OFFSETS:
             label, delta = REMINDER_OFFSETS[choice]
-            remind_at = datetime.now(timezone.utc) + delta
+            remind_at = datetime.now(UTC) + delta
+
             manager.set_email_snooze(email.id, remind_at)
             print(f"Email snoozed until {remind_at.isoformat(timespec='seconds')} ({label}).")
             return

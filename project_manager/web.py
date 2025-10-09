@@ -4,7 +4,9 @@ from __future__ import annotations
 import os
 import sqlite3
 import tempfile
-from datetime import datetime, timezone
+
+from datetime import datetime, UTC
+
 from pathlib import Path
 
 from flask import Flask, flash, redirect, render_template, request, url_for
@@ -43,7 +45,7 @@ def create_app() -> Flask:
             "index.html",
             emails=emails,
             projects=projects,
-            now=datetime.now(timezone.utc),
+            now=datetime.now(UTC),
         )
 
     @app.post("/ingest")
@@ -133,7 +135,8 @@ def create_app() -> Flask:
             return redirect(url_for("index"))
 
         label, delta = REMINDER_OFFSETS[interval]
-        remind_at = datetime.now(timezone.utc) + delta
+
+        remind_at = datetime.now(UTC) + delta
         manager.set_email_snooze(email_id, remind_at)
         flash(
             f"Email snoozed until {remind_at.strftime('%Y-%m-%d %H:%M')} ({label}).",
