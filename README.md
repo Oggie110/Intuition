@@ -26,6 +26,12 @@ This repository contains a minimal email-driven project management helper writte
 
 4. Run the CLI through the module entry point:
 
+## Getting started
+
+1. **Install Python 3.10+** (the app uses only the standard library).
+2. (Optional) Set a custom storage directory by exporting `PROJECT_MANAGER_HOME=/path/to/storage`. Otherwise data lives in `~/.project_manager/`.
+3. Run the CLI through the module entry point:
+
    ```bash
    python -m project_manager.cli --help
    ```

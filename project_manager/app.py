@@ -110,6 +110,17 @@ class ProjectManager:
                 "SELECT * FROM emails WHERE message_id = ?", (parsed.message_id,)
             ).fetchone()
             return _row_to_email(row)
+            return EmailEntry(
+                id=row["id"],
+                message_id=row["message_id"],
+                subject=row["subject"],
+                sender=row["sender"],
+                received_at=row["received_at"],
+                snippet=row["snippet"],
+                status=row["status"],
+                project_id=row["project_id"],
+                remind_at=row["remind_at"],
+            )
 
     def set_email_project(self, email_id: int, project_id: int) -> None:
         with database.db_session() as conn:
@@ -161,6 +172,20 @@ class ProjectManager:
                 """
             ).fetchall()
         return [_row_to_email(row) for row in rows]
+        return [
+            EmailEntry(
+                id=row["id"],
+                message_id=row["message_id"],
+                subject=row["subject"],
+                sender=row["sender"],
+                received_at=row["received_at"],
+                snippet=row["snippet"],
+                status=row["status"],
+                project_id=row["project_id"],
+                remind_at=row["remind_at"],
+            )
+            for row in rows
+        ]
 
     # High level flow ------------------------------------------------------------------
     def ingest_email_file(self, path: Path) -> Optional[EmailEntry]:
@@ -263,3 +288,17 @@ def iter_pending_emails(manager: ProjectManager, statuses: Iterable[str] = ("una
     with database.db_session() as conn:
         rows = conn.execute(query, tuple(statuses)).fetchall()
     return [_row_to_email(row) for row in rows]
+    return [
+        EmailEntry(
+            id=row["id"],
+            message_id=row["message_id"],
+            subject=row["subject"],
+            sender=row["sender"],
+            received_at=row["received_at"],
+            snippet=row["snippet"],
+            status=row["status"],
+            project_id=row["project_id"],
+            remind_at=row["remind_at"],
+        )
+        for row in rows
+    ]
