@@ -31,6 +31,22 @@ class EmailEntry:
     remind_at: Optional[str]
 
 
+def _row_to_email(row) -> EmailEntry:
+    """Convert a database row to an :class:`EmailEntry`."""
+
+    return EmailEntry(
+        id=row["id"],
+        message_id=row["message_id"],
+        subject=row["subject"],
+        sender=row["sender"],
+        received_at=row["received_at"],
+        snippet=row["snippet"],
+        status=row["status"],
+        project_id=row["project_id"],
+        remind_at=row["remind_at"],
+    )
+
+
 class ProjectManager:
     """High level application service coordinating storage and prompts."""
 
@@ -93,17 +109,7 @@ class ProjectManager:
             row = conn.execute(
                 "SELECT * FROM emails WHERE message_id = ?", (parsed.message_id,)
             ).fetchone()
-            return EmailEntry(
-                id=row["id"],
-                message_id=row["message_id"],
-                subject=row["subject"],
-                sender=row["sender"],
-                received_at=row["received_at"],
-                snippet=row["snippet"],
-                status=row["status"],
-                project_id=row["project_id"],
-                remind_at=row["remind_at"],
-            )
+            return _row_to_email(row)
 
     def set_email_project(self, email_id: int, project_id: int) -> None:
         with database.db_session() as conn:
@@ -138,6 +144,13 @@ class ProjectManager:
                 (email_id,),
             )
 
+    def get_email(self, email_id: int) -> Optional[EmailEntry]:
+        with database.db_session() as conn:
+            row = conn.execute("SELECT * FROM emails WHERE id = ?", (email_id,)).fetchone()
+        if row is None:
+            return None
+        return _row_to_email(row)
+
     def list_pending_reminders(self) -> list[EmailEntry]:
         with database.db_session() as conn:
             rows = conn.execute(
@@ -147,20 +160,7 @@ class ProjectManager:
                 ORDER BY remind_at
                 """
             ).fetchall()
-        return [
-            EmailEntry(
-                id=row["id"],
-                message_id=row["message_id"],
-                subject=row["subject"],
-                sender=row["sender"],
-                received_at=row["received_at"],
-                snippet=row["snippet"],
-                status=row["status"],
-                project_id=row["project_id"],
-                remind_at=row["remind_at"],
-            )
-            for row in rows
-        ]
+        return [_row_to_email(row) for row in rows]
 
     # High level flow ------------------------------------------------------------------
     def ingest_email_file(self, path: Path) -> Optional[EmailEntry]:
@@ -262,17 +262,4 @@ def iter_pending_emails(manager: ProjectManager, statuses: Iterable[str] = ("una
     )
     with database.db_session() as conn:
         rows = conn.execute(query, tuple(statuses)).fetchall()
-    return [
-        EmailEntry(
-            id=row["id"],
-            message_id=row["message_id"],
-            subject=row["subject"],
-            sender=row["sender"],
-            received_at=row["received_at"],
-            snippet=row["snippet"],
-            status=row["status"],
-            project_id=row["project_id"],
-            remind_at=row["remind_at"],
-        )
-        for row in rows
-    ]
+    return [_row_to_email(row) for row in rows]
