@@ -1,0 +1,40 @@
+{% extends "base.html" %}
+
+{% block content %}
+  <section class="card">
+    <h2>Create a project</h2>
+    <form action="{{ url_for('create_project') }}" method="post">
+      <div class="field-group">
+        <input type="text" name="name" placeholder="Project name" required>
+        <button type="submit">Create</button>
+      </div>
+      <p class="muted">Projects let you collect related emails together.</p>
+    </form>
+  </section>
+
+  <section>
+    <h2>All projects</h2>
+    {% if projects %}
+      <div class="card">
+        <table>
+          <thead>
+            <tr>
+              <th scope="col">#</th>
+              <th scope="col">Name</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for project in projects %}
+              <tr>
+                <td>{{ project.id }}</td>
+                <td>{{ project.name }}</td>
+              </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    {% else %}
+      <p class="muted">No projects yet. Create one above or from the inbox view.</p>
+    {% endif %}
+  </section>
+{% endblock %}
