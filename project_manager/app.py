@@ -9,7 +9,7 @@ from typing import Iterable, Optional
 
 from . import database
 from .config import RAW_EMAIL_DIR
-from .email_utils import ParsedEmail, parse_email_file
+from .email_utils import ParsedEmail, parse_email_file, parse_raw_email
 
 
 @dataclass
@@ -177,6 +177,53 @@ ORDER BY datetime(remind_at)
         shutil.copy2(path, storage_path)
 
         return self.upsert_email(parsed, storage_path)
+
+    def ingest_from_source(self, raw_email) -> Optional[EmailEntry]:
+        """Ingest an email from an email source (Gmail, Apple Mail, etc.)."""
+        # Import here to avoid circular dependency
+        from .email_sources import RawEmail
+
+        if self.is_sender_ignored(raw_email.sender):
+            return None
+
+        # Create safe filename from message_id
+        safe_stem = "".join(
+            ch if ch.isalnum() or ch in {"-", "_"} else "_" for ch in raw_email.message_id
+        )
+        storage_path = RAW_EMAIL_DIR / f"{safe_stem}.eml"
+
+        # Save raw email content to storage
+        storage_path.write_bytes(raw_email.raw_content)
+
+        # Parse to our internal format
+        parsed = parse_raw_email(raw_email, storage_path)
+
+        return self.upsert_email(parsed, storage_path)
+
+    def fetch_from_all_sources(self, max_per_source: int = 10) -> list[EmailEntry]:
+        """Fetch emails from all configured email sources."""
+        from .email_sources import get_available_sources
+
+        sources = get_available_sources()
+        ingested_emails = []
+
+        for source in sources:
+            try:
+                raw_emails = source.fetch_unread(max_results=max_per_source)
+                print(f"Fetched {len(raw_emails)} emails from {source.__class__.__name__}")
+
+                for raw_email in raw_emails:
+                    email_entry = self.ingest_from_source(raw_email)
+                    if email_entry:
+                        ingested_emails.append(email_entry)
+                        # Optionally mark as processed in the source
+                        # source.mark_as_processed(raw_email.source_id)
+
+            except Exception as e:
+                print(f"Error fetching from {source.__class__.__name__}: {e}")
+                continue
+
+        return ingested_emails
 
 
 REMINDER_OFFSETS = {

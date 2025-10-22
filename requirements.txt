@@ -1,0 +1,11 @@
+# Core web interface (optional)
+flask>=3.0.0
+
+# Gmail API integration
+google-auth>=2.23.0
+google-auth-oauthlib>=1.1.0
+google-auth-httplib2>=0.1.1
+google-api-python-client>=2.100.0
+
+# macOS Apple Mail integration (macOS only)
+# pyobjc-framework-ScriptingBridge>=10.0; sys_platform == 'darwin'

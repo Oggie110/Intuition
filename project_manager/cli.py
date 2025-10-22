@@ -16,8 +16,22 @@ def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description="Personal email-to-project manager")
     subparsers = parser.add_subparsers(dest="command")
 
-    ingest = subparsers.add_parser("ingest", help="Ingest an .eml file and categorise it")
-    ingest.add_argument("path", type=Path, help="Path to the .eml file")
+    fetch = subparsers.add_parser("fetch", help="Fetch emails from configured email sources")
+    fetch.add_argument(
+        "--max",
+        type=int,
+        default=10,
+        help="Max emails to fetch per source (default: 10)",
+    )
+    fetch.add_argument(
+        "--auto-triage",
+        action="store_true",
+        help="Automatically prompt for each fetched email",
+    )
+
+    subparsers.add_parser("setup-gmail", help="Setup Gmail OAuth authentication")
+
+    subparsers.add_parser("list-sources", help="List configured email sources")
 
     subparsers.add_parser("list-projects", help="List all projects")
 
@@ -34,21 +48,10 @@ def build_parser() -> argparse.ArgumentParser:
     return parser
 
 
-def handle_ingest(manager: ProjectManager, path: Path) -> None:
-    if not path.exists():
-        raise SystemExit(f"File not found: {path}")
-
-    email_entry = manager.ingest_email_file(path)
-    if email_entry is None:
-        print("Sender is on the ignore list. Skipping.")
-        return
-    prompt_user_for_email(manager, email_entry)
-
-
 def handle_list_projects(manager: ProjectManager) -> None:
     projects = manager.list_projects()
     if not projects:
-        print("No projects yet. Use the ingest flow to create one.")
+        print("No projects yet. Fetch emails and create one during triage.")
         return
     for project in projects:
         print(f"[{project.id}] {project.name}")
@@ -83,6 +86,71 @@ def handle_check_reminders(manager: ProjectManager) -> None:
         )
 
 
+def handle_setup_gmail() -> None:
+    """Setup Gmail OAuth authentication."""
+    from .email_sources import GmailSource, GMAIL_CREDENTIALS_PATH
+
+    if not GMAIL_CREDENTIALS_PATH.exists():
+        print(f"\nGmail OAuth credentials not found at: {GMAIL_CREDENTIALS_PATH}")
+        print("\nTo setup Gmail integration:")
+        print("1. Go to https://console.cloud.google.com/")
+        print("2. Create a new project or select an existing one")
+        print("3. Enable the Gmail API")
+        print("4. Create OAuth 2.0 credentials (Desktop app)")
+        print("5. Download the credentials JSON file")
+        print(f"6. Save it to: {GMAIL_CREDENTIALS_PATH}")
+        print("\nThen run this command again.")
+        return
+
+    print("Starting Gmail OAuth flow...")
+    try:
+        gmail = GmailSource()
+        gmail.authenticate()
+        print("\nGmail authentication successful!")
+        print("You can now use 'fetch' command to retrieve emails from Gmail.")
+    except Exception as e:
+        print(f"\nError during Gmail authentication: {e}")
+        raise SystemExit(1)
+
+
+def handle_list_sources() -> None:
+    """List configured email sources."""
+    from .email_sources import get_available_sources
+
+    sources = get_available_sources()
+    if not sources:
+        print("No email sources configured.")
+        print("\nAvailable sources:")
+        print("  - Gmail: Run 'setup-gmail' to configure")
+        print("  - Apple Mail: Automatically detected on macOS")
+        return
+
+    print("Configured email sources:")
+    for source in sources:
+        print(f"  - {source.__class__.__name__}")
+
+
+def handle_fetch(manager: ProjectManager, max_results: int, auto_triage: bool) -> None:
+    """Fetch emails from all configured sources."""
+    print(f"Fetching up to {max_results} emails per source...")
+
+    ingested = manager.fetch_from_all_sources(max_per_source=max_results)
+
+    if not ingested:
+        print("\nNo new emails found.")
+        return
+
+    print(f"\nIngested {len(ingested)} new email(s).")
+
+    if auto_triage:
+        print("\nStarting auto-triage...")
+        for email_entry in ingested:
+            prompt_user_for_email(manager, email_entry)
+    else:
+        print("\nUse 'list-emails --status unassigned' to see them.")
+        print("Or run 'fetch --auto-triage' to triage immediately.")
+
+
 def main(args: list[str] | None = None) -> None:
     parser = build_parser()
     parsed = parser.parse_args(args)
@@ -90,10 +158,19 @@ def main(args: list[str] | None = None) -> None:
         parser.print_help()
         return
 
+    # Commands that don't need ProjectManager
+    if parsed.command == "setup-gmail":
+        handle_setup_gmail()
+        return
+    elif parsed.command == "list-sources":
+        handle_list_sources()
+        return
+
+    # Commands that need ProjectManager
     manager = ProjectManager()
 
-    if parsed.command == "ingest":
-        handle_ingest(manager, parsed.path)
+    if parsed.command == "fetch":
+        handle_fetch(manager, parsed.max, parsed.auto_triage)
     elif parsed.command == "list-projects":
         handle_list_projects(manager)
     elif parsed.command == "list-emails":

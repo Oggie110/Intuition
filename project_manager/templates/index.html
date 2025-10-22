@@ -2,13 +2,15 @@
 
 {% block content %}
   <section class="card">
-    <h2>Ingest a new email</h2>
-    <form action="{{ url_for('ingest_email') }}" method="post" enctype="multipart/form-data">
+    <h2>Fetch new emails</h2>
+
+    <form action="{{ url_for('fetch_emails') }}" method="post">
       <div class="field-group">
-        <input type="file" name="email_file" accept=".eml" required>
-        <button type="submit">Upload email</button>
+        <label for="max-emails">Max emails per source:</label>
+        <input id="max-emails" type="number" name="max" value="10" min="1" max="50" style="width: 80px;">
+        <button type="submit">Fetch from Gmail/Apple Mail</button>
       </div>
-      <p class="muted">Drop a forwarded <code>.eml</code> file here to triage it in the browser.</p>
+      <p class="muted">Auto-fetch unread emails from configured sources (Gmail, Apple Mail).</p>
     </form>
   </section>
 

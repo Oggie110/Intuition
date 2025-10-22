@@ -3,10 +3,7 @@ from __future__ import annotations
 
 import os
 import sqlite3
-import tempfile
-
 from datetime import datetime, UTC
-
 from pathlib import Path
 
 from flask import Flask, flash, redirect, render_template, request, url_for
@@ -48,29 +45,22 @@ def create_app() -> Flask:
             now=datetime.now(UTC),
         )
 
-    @app.post("/ingest")
-    def ingest_email():
-        upload = request.files.get("email_file")
-        if upload is None or not upload.filename:
-            flash("Please choose an .eml file to upload.", "error")
-            return redirect(url_for("index"))
-
-        with tempfile.NamedTemporaryFile(
-            delete=False, suffix=Path(upload.filename).suffix or ".eml"
-        ) as tmp:
-            temp_path = Path(tmp.name)
-
-        upload.save(temp_path)
+    @app.post("/fetch")
+    def fetch_emails():
+        """Fetch emails from all configured email sources."""
+        max_per_source = int(request.form.get("max", 10))
 
         try:
-            entry = manager.ingest_email_file(temp_path)
-        finally:
-            temp_path.unlink(missing_ok=True)
+            ingested = manager.fetch_from_all_sources(max_per_source=max_per_source)
 
-        if entry is None:
-            flash("Sender is ignored, email was skipped.", "info")
-        else:
-            flash("Email stored and ready for triage.", "success")
+            if not ingested:
+                flash("No new emails found from configured sources.", "info")
+            else:
+                flash(f"Fetched {len(ingested)} new email(s) ready for triage.", "success")
+
+        except Exception as e:
+            flash(f"Error fetching emails: {e}", "error")
+
         return redirect(url_for("index"))
 
     @app.post("/emails/<int:email_id>/assign")
