@@ -3,10 +3,7 @@ from __future__ import annotations
 
 import os
 import sqlite3
-import tempfile
-
 from datetime import datetime, UTC
-
 from pathlib import Path
 
 from flask import Flask, flash, redirect, render_template, request, url_for
@@ -47,31 +44,6 @@ def create_app() -> Flask:
             projects=projects,
             now=datetime.now(UTC),
         )
-
-    @app.post("/ingest")
-    def ingest_email():
-        upload = request.files.get("email_file")
-        if upload is None or not upload.filename:
-            flash("Please choose an .eml file to upload.", "error")
-            return redirect(url_for("index"))
-
-        with tempfile.NamedTemporaryFile(
-            delete=False, suffix=Path(upload.filename).suffix or ".eml"
-        ) as tmp:
-            temp_path = Path(tmp.name)
-
-        upload.save(temp_path)
-
-        try:
-            entry = manager.ingest_email_file(temp_path)
-        finally:
-            temp_path.unlink(missing_ok=True)
-
-        if entry is None:
-            flash("Sender is ignored, email was skipped.", "info")
-        else:
-            flash("Email stored and ready for triage.", "success")
-        return redirect(url_for("index"))
 
     @app.post("/fetch")
     def fetch_emails():

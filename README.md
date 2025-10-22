@@ -4,17 +4,16 @@ This repository contains a minimal email-driven project management helper writte
 
 ## Features
 
-- **Auto-fetch emails** from Gmail and Apple Mail (macOS) - no more manual exports!
-- Store projects and incoming email metadata in a lightweight SQLite database.
+- **Auto-fetch emails** from Gmail and Apple Mail (macOS)
+- Store projects and incoming email metadata in a lightweight SQLite database
 - Triage emails interactively or via web dashboard:
   1. Assign the message to an existing project
   2. Create a brand-new project for it
   3. Snooze the decision for 1 day, 1 week, or 1 month
   4. Ignore all future emails from the sender
-- Keep the raw email content for reference.
-- List projects, inspect tracked emails, and surface snoozed emails whose reminders are due.
-- Lightweight Flask-powered web dashboard with one-click email fetching.
-- Still supports manual `.eml` file uploads for other email providers.
+- Keep the raw email content for reference
+- List projects, inspect tracked emails, and surface snoozed emails whose reminders are due
+- Lightweight Flask-powered web dashboard with one-click email fetching
 
 ## Getting started
 
@@ -73,7 +72,7 @@ Apple Mail integration works automatically on macOS! No setup required - just ma
 
 ## Typical workflow
 
-### Option 1: Auto-fetch from Gmail/Apple Mail (Recommended)
+### Fetch and triage emails
 
 1. Fetch emails from all configured sources:
 
@@ -81,24 +80,19 @@ Apple Mail integration works automatically on macOS! No setup required - just ma
    python -m project_manager.cli fetch
    ```
 
-   Or fetch and immediately triage:
+   Or fetch and immediately triage interactively:
 
    ```bash
    python -m project_manager.cli fetch --auto-triage
    ```
 
-2. Follow the interactive prompts to assign each email to a project.
-
-### Option 2: Manual .eml file upload
-
-1. Save an email as an `.eml` file from your email client.
-2. Ingest it:
+   Customize the batch size:
 
    ```bash
-   python -m project_manager.cli ingest path/to/message.eml
+   python -m project_manager.cli fetch --max 20 --auto-triage
    ```
 
-3. Follow the interactive prompt to choose the appropriate project action.
+2. Follow the interactive prompts to assign each email to a project.
 
 ### Managing your projects
 
@@ -126,12 +120,11 @@ python -m project_manager.web
 Then open <http://127.0.0.1:5000/>.
 
 The web interface provides:
-- **One-click email fetching** from Gmail/Apple Mail
-- Upload `.eml` files manually
-- Assign emails to existing projects or create new ones
+- **One-click email fetching** from Gmail/Apple Mail with configurable batch size
+- Assign emails to existing projects or create new ones on the fly
 - Snooze decisions for a later date (1 day, 1 week, 1 month)
 - Ignore senders entirely
-- Browse all projects at `/projects`
+- Browse and manage all projects at `/projects`
 
 ## Future directions
 

@@ -16,9 +16,6 @@ def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description="Personal email-to-project manager")
     subparsers = parser.add_subparsers(dest="command")
 
-    ingest = subparsers.add_parser("ingest", help="Ingest an .eml file and categorise it")
-    ingest.add_argument("path", type=Path, help="Path to the .eml file")
-
     fetch = subparsers.add_parser("fetch", help="Fetch emails from configured email sources")
     fetch.add_argument(
         "--max",
@@ -51,21 +48,10 @@ def build_parser() -> argparse.ArgumentParser:
     return parser
 
 
-def handle_ingest(manager: ProjectManager, path: Path) -> None:
-    if not path.exists():
-        raise SystemExit(f"File not found: {path}")
-
-    email_entry = manager.ingest_email_file(path)
-    if email_entry is None:
-        print("Sender is on the ignore list. Skipping.")
-        return
-    prompt_user_for_email(manager, email_entry)
-
-
 def handle_list_projects(manager: ProjectManager) -> None:
     projects = manager.list_projects()
     if not projects:
-        print("No projects yet. Use the ingest flow to create one.")
+        print("No projects yet. Fetch emails and create one during triage.")
         return
     for project in projects:
         print(f"[{project.id}] {project.name}")
@@ -183,9 +169,7 @@ def main(args: list[str] | None = None) -> None:
     # Commands that need ProjectManager
     manager = ProjectManager()
 
-    if parsed.command == "ingest":
-        handle_ingest(manager, parsed.path)
-    elif parsed.command == "fetch":
+    if parsed.command == "fetch":
         handle_fetch(manager, parsed.max, parsed.auto_triage)
     elif parsed.command == "list-projects":
         handle_list_projects(manager)
