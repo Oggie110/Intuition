@@ -152,6 +152,33 @@ def create_app() -> Flask:
         projects = manager.list_projects()
         return render_template("projects.html", projects=projects)
 
+    @app.get("/projects/<int:project_id>")
+    def project_detail(project_id: int):
+        project = manager.get_project(project_id)
+        if project is None:
+            flash("Project not found.", "error")
+            return redirect(url_for("list_projects"))
+
+        emails = manager.get_emails_by_project(project_id)
+
+        # Get email content if an email_id is specified
+        selected_email_id = request.args.get("email_id", type=int)
+        email_content = None
+        content_type = "text"
+        if selected_email_id:
+            result = manager.get_email_content(selected_email_id)
+            if result:
+                email_content, content_type = result
+
+        return render_template(
+            "project_detail.html",
+            project=project,
+            emails=emails,
+            selected_email_id=selected_email_id,
+            email_content=email_content,
+            content_type=content_type
+        )
+
     @app.post("/projects")
     def create_project():
         name = request.form.get("name", "").strip()

@@ -27,7 +27,7 @@
             {% for project in projects %}
               <tr>
                 <td>{{ project.id }}</td>
-                <td>{{ project.name }}</td>
+                <td><a href="{{ url_for('project_detail', project_id=project.id) }}">{{ project.name }}</a></td>
               </tr>
             {% endfor %}
           </tbody>

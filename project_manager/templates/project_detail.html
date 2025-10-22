@@ -1,0 +1,73 @@
+{% extends "base.html" %}
+
+{% block content %}
+  <section>
+    <div style="display: flex; justify-content: space-between; align-items: center;">
+      <h1>{{ project.name }}</h1>
+      <a href="{{ url_for('list_projects') }}" style="text-decoration: none;">← Back to Projects</a>
+    </div>
+  </section>
+
+  <section>
+    <h2>Emails ({{ emails|length }})</h2>
+    {% if emails %}
+      <div class="card">
+        <table>
+          <thead>
+            <tr>
+              <th scope="col">Subject</th>
+              <th scope="col">From</th>
+              <th scope="col">Received</th>
+              <th scope="col">Status</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for email in emails %}
+              <tr style="{% if selected_email_id == email.id %}background-color: #f0f0f0;{% endif %}">
+                <td>
+                  <a href="{{ url_for('project_detail', project_id=project.id, email_id=email.id) }}" style="text-decoration: none; color: inherit;">
+                    <strong>{{ email.subject or "(no subject)" }}</strong>
+                  </a>
+                  {% if email.snippet and selected_email_id != email.id %}
+                    <br><small class="muted">{{ email.snippet[:100] }}{% if email.snippet|length > 100 %}...{% endif %}</small>
+                  {% endif %}
+                </td>
+                <td>{{ email.sender or "Unknown" }}</td>
+                <td>{{ email.received_at or "Unknown" }}</td>
+                <td>
+                  <span class="badge {% if email.status == 'assigned' %}badge-success{% elif email.status == 'snoozed' %}badge-warning{% else %}badge-info{% endif %}">
+                    {{ email.status }}
+                  </span>
+                </td>
+              </tr>
+              {% if selected_email_id == email.id %}
+                <tr>
+                  <td colspan="4" style="background-color: #fafafa; padding: 20px;">
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
+                      <h3 style="margin: 0;">Full Email Content</h3>
+                      <a href="{{ url_for('project_detail', project_id=project.id) }}" style="text-decoration: none;">✕ Close</a>
+                    </div>
+                    <hr style="margin: 10px 0;">
+                    {% if email_content %}
+                      {% if content_type == 'html' %}
+                        <div style="background-color: white; padding: 15px; border: 1px solid #ddd; border-radius: 4px; max-height: 600px; overflow-y: auto;">
+                          {{ email_content|safe }}
+                        </div>
+                      {% else %}
+                        <pre style="white-space: pre-wrap; font-family: monospace; background-color: white; padding: 15px; border: 1px solid #ddd; border-radius: 4px; max-height: 500px; overflow-y: auto;">{{ email_content }}</pre>
+                      {% endif %}
+                    {% else %}
+                      <p class="muted">Email content not available.</p>
+                    {% endif %}
+                  </td>
+                </tr>
+              {% endif %}
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    {% else %}
+      <p class="muted">No emails in this project yet. Assign emails from the inbox view.</p>
+    {% endif %}
+  </section>
+{% endblock %}

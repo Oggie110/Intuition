@@ -1,3 +1,6 @@
 __pycache__/
 *.pyc
 .project_manager/
+**/client_secret_*.json
+**/gmail_credentials.json
+**/gmail_token.json

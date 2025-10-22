@@ -221,66 +221,20 @@ class AppleMailSource(EmailSource):
 
     def fetch_unread(self, max_results: int = 10) -> list[RawEmail]:
         """Fetch unread emails from Apple Mail inbox using AppleScript."""
-        # AppleScript to get unread messages
-        script = f'''
-        tell application "Mail"
-            set unreadMessages to messages of inbox whose read status is false
-            set emailList to {{}}
-
-            repeat with msg in (items 1 thru (count of unreadMessages) of unreadMessages)
-                set msgId to message id of msg
-                set msgSender to sender of msg
-                set msgSubject to subject of msg
-                set msgDate to date received of msg
-                set msgContent to content of msg
-                set msgSource to source of msg
-
-                set emailList to emailList & {{{{msgId, msgSender, msgSubject, msgDate as string, msgContent, msgSource}}}}
-
-                if (count of emailList) >= {max_results} then
-                    exit repeat
-                end if
-            end repeat
-
-            return emailList
-        end tell
-        '''
-
-        try:
-            result = subprocess.run(
-                ['osascript', '-e', script],
-                capture_output=True,
-                text=True,
-                check=True,
-                timeout=30
-            )
-
-            # Parse AppleScript output (comma-separated list)
-            # This is a simplified parser - production code would need more robust parsing
-            raw_emails = []
-            output = result.stdout.strip()
-
-            if not output or output == '{}':
-                return []
-
-            # AppleScript returns format: {{msg1_data}, {msg2_data}, ...}
-            # For now, we'll use a simpler approach and fetch one at a time
-            return self._fetch_unread_individually(max_results)
-
-        except (subprocess.CalledProcessError, subprocess.TimeoutExpired) as e:
-            print(f"Error fetching from Apple Mail: {e}")
-            return []
+        # Fetch emails one at a time with date filter (last 2 days)
+        return self._fetch_unread_individually(max_results)
 
     def _fetch_unread_individually(self, max_results: int) -> list[RawEmail]:
-        """Fetch unread emails one at a time (more reliable parsing)."""
+        """Fetch unread emails one at a time with date filter (last 2 days)."""
         raw_emails = []
 
         for i in range(1, max_results + 1):
             script = f'''
             tell application "Mail"
-                set unreadMessages to messages of inbox whose read status is false
-                if (count of unreadMessages) >= {i} then
-                    set msg to item {i} of unreadMessages
+                set twoDaysAgo to (current date) - (2 * days)
+                set recentUnread to messages of inbox whose read status is false and date received is greater than twoDaysAgo
+                if (count of recentUnread) >= {i} then
+                    set msg to item {i} of recentUnread
                     set msgData to {{message id of msg, sender of msg, subject of msg, ¬
                                      (date received of msg) as string, content of msg, source of msg}}
                     return msgData

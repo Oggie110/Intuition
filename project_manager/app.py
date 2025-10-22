@@ -29,6 +29,7 @@ class EmailEntry:
     status: str
     project_id: Optional[int]
     remind_at: Optional[str]
+    raw_path: Optional[str] = None
 
 
 def _row_to_email(row) -> EmailEntry:
@@ -44,6 +45,7 @@ def _row_to_email(row) -> EmailEntry:
         status=row["status"],
         project_id=row["project_id"],
         remind_at=row["remind_at"],
+        raw_path=row["raw_path"] if "raw_path" in row.keys() else None,
     )
 
 
@@ -58,6 +60,14 @@ class ProjectManager:
         with database.db_session() as conn:
             rows = conn.execute("SELECT id, name FROM projects ORDER BY created_at").fetchall()
             return [Project(id=row["id"], name=row["name"]) for row in rows]
+
+    def get_project(self, project_id: int) -> Optional[Project]:
+        """Get a single project by ID."""
+        with database.db_session() as conn:
+            row = conn.execute("SELECT id, name FROM projects WHERE id = ?", (project_id,)).fetchone()
+            if row is None:
+                return None
+            return Project(id=row["id"], name=row["name"])
 
     def create_project(self, name: str) -> Project:
         with database.db_session() as conn:
@@ -163,6 +173,75 @@ ORDER BY datetime(remind_at)
                 """
             ).fetchall()
         return [_row_to_email(row) for row in rows]
+
+    def get_emails_by_project(self, project_id: int) -> list[EmailEntry]:
+        """Get all emails assigned to a specific project."""
+        with database.db_session() as conn:
+            rows = conn.execute(
+                """
+SELECT * FROM emails
+WHERE project_id = ?
+ORDER BY datetime(received_at) DESC
+                """,
+                (project_id,)
+            ).fetchall()
+        return [_row_to_email(row) for row in rows]
+
+    def get_email_content(self, email_id: int) -> Optional[tuple[str, str]]:
+        """Get the full content of an email from its raw file.
+
+        Returns a tuple of (content, content_type) where content_type is 'text' or 'html'.
+        """
+        from email import policy
+        from email.parser import BytesParser
+        from email.message import EmailMessage
+
+        email = self.get_email(email_id)
+        if email is None or email.raw_path is None:
+            return None
+
+        raw_path = Path(email.raw_path)
+        if not raw_path.exists():
+            return None
+
+        try:
+            with raw_path.open("rb") as fp:
+                message: EmailMessage = BytesParser(policy=policy.default).parse(fp)
+
+            # Try to get HTML content first (richer format)
+            html_parts = []
+            text_parts = []
+
+            if message.is_multipart():
+                for part in message.walk():
+                    content_type = part.get_content_type()
+                    try:
+                        if content_type == "text/html":
+                            html_parts.append(part.get_content())
+                        elif content_type == "text/plain":
+                            text_parts.append(part.get_content())
+                    except Exception:
+                        continue
+            else:
+                content_type = message.get_content_type()
+                try:
+                    content = message.get_content()
+                    if content_type == "text/html":
+                        html_parts.append(content)
+                    else:
+                        text_parts.append(content)
+                except Exception:
+                    pass
+
+            # Prefer HTML if available, otherwise use plain text
+            if html_parts:
+                return ("\n".join(filter(None, html_parts)).strip(), "html")
+            elif text_parts:
+                return ("\n".join(filter(None, text_parts)).strip(), "text")
+            else:
+                return None
+        except Exception:
+            return None
 
     # High level flow ------------------------------------------------------------------
     def ingest_email_file(self, path: Path) -> Optional[EmailEntry]:
