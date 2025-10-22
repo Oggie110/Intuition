@@ -6,7 +6,10 @@ from email import policy
 from email.message import EmailMessage
 from email.parser import BytesParser
 from pathlib import Path
-from typing import Optional
+from typing import Optional, TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from .email_sources import RawEmail
 
 
 @dataclass
@@ -64,3 +67,19 @@ def _extract_snippet(message: EmailMessage, max_length: int = 200) -> str:
     if len(cleaned) > max_length:
         return cleaned[: max_length - 1] + "…"
     return cleaned
+
+
+def parse_raw_email(raw_email: RawEmail, storage_path: Path) -> ParsedEmail:
+    """Convert a RawEmail object to a ParsedEmail with snippet extraction."""
+    # Create snippet from body text
+    cleaned = " ".join(raw_email.body_text.split())
+    snippet = cleaned[:199] + "…" if len(cleaned) > 200 else cleaned
+
+    return ParsedEmail(
+        message_id=raw_email.message_id,
+        sender=raw_email.sender,
+        subject=raw_email.subject,
+        received_at=raw_email.received_at,
+        snippet=snippet,
+        raw_path=storage_path,
+    )

@@ -73,6 +73,24 @@ def create_app() -> Flask:
             flash("Email stored and ready for triage.", "success")
         return redirect(url_for("index"))
 
+    @app.post("/fetch")
+    def fetch_emails():
+        """Fetch emails from all configured email sources."""
+        max_per_source = int(request.form.get("max", 10))
+
+        try:
+            ingested = manager.fetch_from_all_sources(max_per_source=max_per_source)
+
+            if not ingested:
+                flash("No new emails found from configured sources.", "info")
+            else:
+                flash(f"Fetched {len(ingested)} new email(s) ready for triage.", "success")
+
+        except Exception as e:
+            flash(f"Error fetching emails: {e}", "error")
+
+        return redirect(url_for("index"))
+
     @app.post("/emails/<int:email_id>/assign")
     def assign_email(email_id: int):
         entry = manager.get_email(email_id)
