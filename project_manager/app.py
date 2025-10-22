@@ -4,6 +4,7 @@ from __future__ import annotations
 import shutil
 from dataclasses import dataclass
 from datetime import datetime, timedelta, UTC
+from email.utils import parseaddr
 from pathlib import Path
 from typing import Iterable, Optional
 
@@ -16,6 +17,31 @@ from .email_utils import ParsedEmail, parse_email_file, parse_raw_email
 class Project:
     id: int
     name: str
+    description: Optional[str] = None
+
+
+@dataclass
+class Contact:
+    id: int
+    name: Optional[str]
+    email: Optional[str]
+    phone: Optional[str]
+    notes: Optional[str] = None
+
+
+@dataclass
+class Communication:
+    id: int
+    type: str  # 'email', 'whatsapp', 'messenger', 'sms', 'note', 'file', 'meeting'
+    subject: Optional[str]
+    snippet: Optional[str]
+    timestamp: Optional[str]
+    status: str
+    remind_at: Optional[str]
+    raw_path: Optional[str] = None
+    # For backward compatibility with EmailEntry
+    content: Optional[str] = None
+    source_id: Optional[str] = None
 
 
 @dataclass
@@ -49,6 +75,60 @@ def _row_to_email(row) -> EmailEntry:
     )
 
 
+def _row_to_contact(row) -> Contact:
+    """Convert a database row to a :class:`Contact`."""
+    return Contact(
+        id=row["id"],
+        name=row["name"],
+        email=row["email"],
+        phone=row["phone"],
+        notes=row["notes"] if "notes" in row.keys() else None,
+    )
+
+
+def _row_to_communication(row) -> Communication:
+    """Convert a database row to a :class:`Communication`."""
+    return Communication(
+        id=row["id"],
+        type=row["type"],
+        subject=row["subject"],
+        snippet=row["snippet"],
+        timestamp=row["timestamp"],
+        status=row["status"],
+        remind_at=row["remind_at"],
+        raw_path=row["raw_path"] if "raw_path" in row.keys() else None,
+        content=row["content"] if "content" in row.keys() else None,
+        source_id=row["source_id"] if "source_id" in row.keys() else None,
+    )
+
+
+def extract_contact_info(sender: str | None) -> tuple[str | None, str | None]:
+    """Extract name and email from sender string.
+
+    Examples:
+        'John Doe <john@example.com>' -> ('John Doe', 'john@example.com')
+        'john@example.com' -> (None, 'john@example.com')
+    """
+    if not sender:
+        return None, None
+
+    name, email = parseaddr(sender)
+
+    # Clean up name
+    if name:
+        name = name.strip().strip('"').strip("'").strip()
+        if not name:
+            name = None
+
+    # Clean up email
+    if email:
+        email = email.strip().lower()
+        if not email:
+            email = None
+
+    return name, email
+
+
 class ProjectManager:
     """High level application service coordinating storage and prompts."""
 
@@ -69,12 +149,235 @@ class ProjectManager:
                 return None
             return Project(id=row["id"], name=row["name"])
 
-    def create_project(self, name: str) -> Project:
+    def create_project(self, name: str, description: str = None) -> Project:
         with database.db_session() as conn:
-            cur = conn.execute("INSERT INTO projects(name) VALUES (?)", (name.strip(),))
+            cur = conn.execute(
+                "INSERT INTO projects(name, description) VALUES (?, ?)",
+                (name.strip(), description)
+            )
             project_id = cur.lastrowid
-            row = conn.execute("SELECT id, name FROM projects WHERE id = ?", (project_id,)).fetchone()
-            return Project(id=row["id"], name=row["name"])
+            row = conn.execute("SELECT id, name, description FROM projects WHERE id = ?", (project_id,)).fetchone()
+            return Project(id=row["id"], name=row["name"], description=row.get("description"))
+
+    # Contact helpers ------------------------------------------------------------------
+    def get_or_create_contact(self, email: str | None = None, name: str | None = None, phone: str | None = None) -> Contact:
+        """Get existing contact or create new one."""
+        if not email and not name:
+            raise ValueError("Must provide at least email or name")
+
+        with database.db_session() as conn:
+            # Try to find existing contact by email
+            if email:
+                row = conn.execute(
+                    "SELECT * FROM contacts WHERE email = ?", (email.lower().strip(),)
+                ).fetchone()
+
+                if row:
+                    # Update name/phone if we have better info
+                    updates = []
+                    params = []
+                    if name and not row["name"]:
+                        updates.append("name = ?")
+                        params.append(name.strip())
+                    if phone and not row["phone"]:
+                        updates.append("phone = ?")
+                        params.append(phone.strip())
+
+                    if updates:
+                        params.append(row["id"])
+                        conn.execute(
+                            f"UPDATE contacts SET {', '.join(updates)}, updated_at = datetime('now') WHERE id = ?",
+                            params
+                        )
+                        # Fetch updated row
+                        row = conn.execute("SELECT * FROM contacts WHERE id = ?", (row["id"],)).fetchone()
+
+                    return _row_to_contact(row)
+
+            # Create new contact
+            cursor = conn.execute(
+                "INSERT INTO contacts(name, email, phone) VALUES (?, ?, ?)",
+                (name.strip() if name else None, email.lower().strip() if email else None, phone.strip() if phone else None)
+            )
+            row = conn.execute("SELECT * FROM contacts WHERE id = ?", (cursor.lastrowid,)).fetchone()
+            return _row_to_contact(row)
+
+    def get_contact(self, contact_id: int) -> Optional[Contact]:
+        """Get a single contact by ID."""
+        with database.db_session() as conn:
+            row = conn.execute("SELECT * FROM contacts WHERE id = ?", (contact_id,)).fetchone()
+            if row is None:
+                return None
+            return _row_to_contact(row)
+
+    def list_contacts(self) -> list[Contact]:
+        """List all contacts."""
+        with database.db_session() as conn:
+            rows = conn.execute("SELECT * FROM contacts ORDER BY name, email").fetchall()
+            return [_row_to_contact(row) for row in rows]
+
+    def get_project_contacts(self, project_id: int) -> list[Contact]:
+        """Get all contacts involved in a project."""
+        with database.db_session() as conn:
+            rows = conn.execute(
+                """
+                SELECT DISTINCT c.* FROM contacts c
+                JOIN project_contacts pc ON c.id = pc.contact_id
+                WHERE pc.project_id = ?
+                ORDER BY c.name, c.email
+                """,
+                (project_id,)
+            ).fetchall()
+            return [_row_to_contact(row) for row in rows]
+
+    # Communication helpers ------------------------------------------------------------
+    def upsert_communication(
+        self,
+        comm_type: str,
+        source_id: str,
+        subject: str | None = None,
+        snippet: str | None = None,
+        timestamp: str | None = None,
+        raw_path: Path | None = None,
+        content: str | None = None,
+    ) -> Communication:
+        """Create or update a communication."""
+        with database.db_session() as conn:
+            conn.execute(
+                """
+                INSERT INTO communications(type, source_id, subject, snippet, timestamp, raw_path, content)
+                VALUES(?, ?, ?, ?, ?, ?, ?)
+                ON CONFLICT(type, source_id) DO UPDATE SET
+                    subject = excluded.subject,
+                    snippet = excluded.snippet,
+                    timestamp = excluded.timestamp,
+                    raw_path = excluded.raw_path,
+                    content = excluded.content,
+                    updated_at = datetime('now')
+                """,
+                (comm_type, source_id, subject, snippet, timestamp, str(raw_path) if raw_path else None, content),
+            )
+            row = conn.execute(
+                "SELECT * FROM communications WHERE type = ? AND source_id = ?",
+                (comm_type, source_id)
+            ).fetchone()
+            return _row_to_communication(row)
+
+    def link_communication_to_project(self, communication_id: int, project_id: int, contact_id: int) -> None:
+        """Link a communication to a project and contact."""
+        with database.db_session() as conn:
+            # Create link
+            conn.execute(
+                """
+                INSERT OR IGNORE INTO project_communications(project_id, communication_id, contact_id)
+                VALUES (?, ?, ?)
+                """,
+                (project_id, communication_id, contact_id)
+            )
+
+            # Update communication status
+            conn.execute(
+                """
+                UPDATE communications
+                SET status = 'assigned', remind_at = NULL, updated_at = datetime('now')
+                WHERE id = ?
+                """,
+                (communication_id,)
+            )
+
+            # Add contact to project_contacts if not already there
+            conn.execute(
+                """
+                INSERT OR IGNORE INTO project_contacts(project_id, contact_id)
+                VALUES (?, ?)
+                """,
+                (project_id, contact_id)
+            )
+
+    def get_project_communications(self, project_id: int) -> list[tuple[Communication, Contact]]:
+        """Get all communications for a project with associated contacts."""
+        with database.db_session() as conn:
+            rows = conn.execute(
+                """
+                SELECT c.*, co.* FROM communications c
+                JOIN project_communications pc ON c.id = pc.communication_id
+                JOIN contacts co ON pc.contact_id = co.id
+                WHERE pc.project_id = ?
+                ORDER BY datetime(c.timestamp) DESC
+                """,
+                (project_id,)
+            ).fetchall()
+
+            result = []
+            for row in rows:
+                # Split row into communication and contact parts
+                comm = _row_to_communication(row)
+                contact = Contact(
+                    id=row["id"],  # This will be overwritten
+                    name=row["name"],
+                    email=row["email"],
+                    phone=row["phone"],
+                    notes=row.get("notes")
+                )
+                result.append((comm, contact))
+
+            return result
+
+    def get_contact_communications(self, contact_id: int, group_by_project: bool = True) -> dict | list:
+        """Get all communications for a contact, optionally grouped by project."""
+        with database.db_session() as conn:
+            # Check if description column exists in projects table
+            has_description = False
+            try:
+                conn.execute("SELECT description FROM projects LIMIT 1")
+                has_description = True
+            except:
+                pass
+
+            if has_description:
+                rows = conn.execute(
+                    """
+                    SELECT c.*, p.id as project_id, p.name as project_name, p.description as project_description
+                    FROM communications c
+                    JOIN project_communications pc ON c.id = pc.communication_id
+                    JOIN projects p ON pc.project_id = p.id
+                    WHERE pc.contact_id = ?
+                    ORDER BY p.name, datetime(c.timestamp) DESC
+                    """,
+                    (contact_id,)
+                ).fetchall()
+            else:
+                rows = conn.execute(
+                    """
+                    SELECT c.*, p.id as project_id, p.name as project_name
+                    FROM communications c
+                    JOIN project_communications pc ON c.id = pc.communication_id
+                    JOIN projects p ON pc.project_id = p.id
+                    WHERE pc.contact_id = ?
+                    ORDER BY p.name, datetime(c.timestamp) DESC
+                    """,
+                    (contact_id,)
+                ).fetchall()
+
+            if not group_by_project:
+                return [_row_to_communication(row) for row in rows]
+
+            # Group by project
+            grouped = {}
+            for row in rows:
+                project_id = row["project_id"]
+                if project_id not in grouped:
+                    grouped[project_id] = {
+                        "project": Project(
+                            id=row["project_id"],
+                            name=row["project_name"],
+                            description=row["project_description"] if has_description and "project_description" in row.keys() else None
+                        ),
+                        "communications": []
+                    }
+                grouped[project_id]["communications"].append(_row_to_communication(row))
+
+            return grouped
 
     # Sender preferences ---------------------------------------------------------------
     def is_sender_ignored(self, sender: Optional[str]) -> bool:
@@ -94,7 +397,9 @@ class ProjectManager:
 
     # Email helpers --------------------------------------------------------------------
     def upsert_email(self, parsed: ParsedEmail, raw_storage_path: Path) -> EmailEntry:
+        """Store email in BOTH old and new schema (dual-write for migration)."""
         with database.db_session() as conn:
+            # 1. Write to OLD emails table (backward compatibility)
             conn.execute(
                 """
                 INSERT INTO emails(message_id, subject, sender, received_at, snippet, raw_path)
@@ -116,13 +421,61 @@ class ProjectManager:
                     str(raw_storage_path),
                 ),
             )
+
+            # 2. Write to NEW schema (communications + contacts)
+            # Extract contact info
+            name, email = extract_contact_info(parsed.sender)
+
+            if email:  # Only create contact if we have an email
+                # Get or create contact
+                contact_row = conn.execute(
+                    "SELECT id FROM contacts WHERE email = ?", (email,)
+                ).fetchone()
+
+                if contact_row:
+                    contact_id = contact_row["id"]
+                    # Update name if we have one and it's better
+                    if name:
+                        conn.execute(
+                            """
+                            UPDATE contacts SET name = COALESCE(name, ?), updated_at = datetime('now')
+                            WHERE id = ?
+                            """,
+                            (name, contact_id)
+                        )
+                else:
+                    # Create new contact
+                    cursor = conn.execute(
+                        "INSERT INTO contacts(name, email) VALUES (?, ?)",
+                        (name, email)
+                    )
+                    contact_id = cursor.lastrowid
+
+                # Create or update communication
+                conn.execute(
+                    """
+                    INSERT INTO communications(type, source_id, subject, snippet, timestamp, raw_path)
+                    VALUES(?, ?, ?, ?, ?, ?)
+                    ON CONFLICT(type, source_id) DO UPDATE SET
+                        subject = excluded.subject,
+                        snippet = excluded.snippet,
+                        timestamp = excluded.timestamp,
+                        raw_path = excluded.raw_path,
+                        updated_at = datetime('now')
+                    """,
+                    ("email", parsed.message_id, parsed.subject, parsed.snippet, parsed.received_at, str(raw_storage_path))
+                )
+
+            # Return old format for backward compatibility
             row = conn.execute(
                 "SELECT * FROM emails WHERE message_id = ?", (parsed.message_id,)
             ).fetchone()
             return _row_to_email(row)
 
     def set_email_project(self, email_id: int, project_id: int) -> None:
+        """Assign email to project. Updates BOTH old and new schema."""
         with database.db_session() as conn:
+            # 1. Update OLD emails table
             conn.execute(
                 """
                 UPDATE emails
@@ -131,6 +484,53 @@ class ProjectManager:
                 """,
                 (project_id, email_id),
             )
+
+            # 2. Update NEW schema (if communication exists)
+            # Get the email to find its message_id and sender
+            email = conn.execute("SELECT message_id, sender FROM emails WHERE id = ?", (email_id,)).fetchone()
+            if email:
+                # Find corresponding communication
+                comm = conn.execute(
+                    "SELECT id FROM communications WHERE type = 'email' AND source_id = ?",
+                    (email["message_id"],)
+                ).fetchone()
+
+                if comm:
+                    # Get or create contact
+                    name, email_addr = extract_contact_info(email["sender"])
+                    if email_addr:
+                        contact = conn.execute(
+                            "SELECT id FROM contacts WHERE email = ?", (email_addr,)
+                        ).fetchone()
+
+                        if contact:
+                            # Link communication to project
+                            conn.execute(
+                                """
+                                INSERT OR IGNORE INTO project_communications(project_id, communication_id, contact_id)
+                                VALUES (?, ?, ?)
+                                """,
+                                (project_id, comm["id"], contact["id"])
+                            )
+
+                            # Update communication status
+                            conn.execute(
+                                """
+                                UPDATE communications
+                                SET status = 'assigned', remind_at = NULL, updated_at = datetime('now')
+                                WHERE id = ?
+                                """,
+                                (comm["id"],)
+                            )
+
+                            # Add to project_contacts
+                            conn.execute(
+                                """
+                                INSERT OR IGNORE INTO project_contacts(project_id, contact_id)
+                                VALUES (?, ?)
+                                """,
+                                (project_id, contact["id"])
+                            )
 
     def set_email_snooze(self, email_id: int, remind_at: datetime) -> None:
         with database.db_session() as conn:
@@ -258,7 +658,7 @@ ORDER BY datetime(received_at) DESC
         return self.upsert_email(parsed, storage_path)
 
     def ingest_from_source(self, raw_email) -> Optional[EmailEntry]:
-        """Ingest an email from an email source (Gmail, Apple Mail, etc.)."""
+        """Ingest an email from an email source (Gmail)."""
         # Import here to avoid circular dependency
         from .email_sources import RawEmail
 

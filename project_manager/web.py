@@ -195,6 +195,46 @@ def create_app() -> Flask:
         flash(f"Project '{project.name}' created.", "success")
         return redirect(url_for("list_projects"))
 
+    @app.get("/contacts")
+    def list_contacts():
+        """List all contacts."""
+        contacts = manager.list_contacts()
+        return render_template("contacts.html", contacts=contacts)
+
+    @app.get("/contacts/<int:contact_id>")
+    def contact_detail(contact_id: int):
+        """Show contact detail with communications grouped by project."""
+        contact = manager.get_contact(contact_id)
+        if contact is None:
+            flash("Contact not found.", "error")
+            return redirect(url_for("list_contacts"))
+
+        # Get communications grouped by project
+        grouped_comms = manager.get_contact_communications(contact_id, group_by_project=True)
+
+        # Get email content if specified
+        selected_comm_id = request.args.get("comm_id", type=int)
+        comm_content = None
+        content_type = "text"
+        if selected_comm_id:
+            # Find the communication in grouped_comms
+            for project_data in grouped_comms.values():
+                for comm in project_data["communications"]:
+                    if comm.id == selected_comm_id and comm.type == "email" and comm.raw_path:
+                        result = manager.get_email_content(selected_comm_id)
+                        if result:
+                            comm_content, content_type = result
+                        break
+
+        return render_template(
+            "contact_detail.html",
+            contact=contact,
+            grouped_communications=grouped_comms,
+            selected_comm_id=selected_comm_id,
+            comm_content=comm_content,
+            content_type=content_type
+        )
+
     return app
 
 

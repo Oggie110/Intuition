@@ -1,15 +1,12 @@
-"""Email source abstraction for fetching emails from different providers."""
+"""Email source abstraction for fetching emails from Gmail."""
 from __future__ import annotations
 
 import base64
-import json
-import subprocess
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
 from email import policy
 from email.message import EmailMessage
 from email.parser import BytesParser
-from pathlib import Path
 from typing import Optional
 
 from .config import HOME_DIR
@@ -35,7 +32,7 @@ class RawEmail:
     body_text: str
     raw_content: bytes  # raw RFC822 email content
     source_id: str  # provider-specific ID (for marking as read, etc.)
-    source_type: str  # 'gmail', 'apple_mail', etc.
+    source_type: str  # 'gmail'
 
 
 class EmailSource(ABC):
@@ -195,145 +192,6 @@ class GmailSource(EmailSource):
 
 
 # ============================================================================
-# Apple Mail Source Implementation
-# ============================================================================
-
-class AppleMailSource(EmailSource):
-    """Email source for macOS Apple Mail using AppleScript."""
-
-    def is_configured(self) -> bool:
-        """Check if running on macOS with Mail.app available."""
-        import platform
-        if platform.system() != 'Darwin':
-            return False
-
-        # Check if Mail.app is installed
-        try:
-            subprocess.run(
-                ['osascript', '-e', 'tell application "Mail" to get name'],
-                capture_output=True,
-                check=True,
-                timeout=5
-            )
-            return True
-        except (subprocess.CalledProcessError, FileNotFoundError, subprocess.TimeoutExpired):
-            return False
-
-    def fetch_unread(self, max_results: int = 10) -> list[RawEmail]:
-        """Fetch unread emails from Apple Mail inbox using AppleScript."""
-        # Fetch emails one at a time with date filter (last 2 days)
-        return self._fetch_unread_individually(max_results)
-
-    def _fetch_unread_individually(self, max_results: int) -> list[RawEmail]:
-        """Fetch unread emails one at a time with date filter (last 2 days)."""
-        raw_emails = []
-
-        for i in range(1, max_results + 1):
-            script = f'''
-            tell application "Mail"
-                set twoDaysAgo to (current date) - (2 * days)
-                set recentUnread to messages of inbox whose read status is false and date received is greater than twoDaysAgo
-                if (count of recentUnread) >= {i} then
-                    set msg to item {i} of recentUnread
-                    set msgData to {{message id of msg, sender of msg, subject of msg, ¬
-                                     (date received of msg) as string, content of msg, source of msg}}
-                    return msgData
-                else
-                    return ""
-                end if
-            end tell
-            '''
-
-            try:
-                result = subprocess.run(
-                    ['osascript', '-e', script],
-                    capture_output=True,
-                    text=True,
-                    check=True,
-                    timeout=10
-                )
-
-                output = result.stdout.strip()
-                if not output:
-                    break
-
-                # Parse the output - AppleScript returns comma-separated values
-                parts = self._parse_applescript_list(output)
-                if len(parts) >= 6:
-                    message_id = parts[0]
-                    sender = parts[1]
-                    subject = parts[2]
-                    received_at = parts[3]
-                    body_text = parts[4]
-                    raw_source = parts[5]
-
-                    raw_emails.append(RawEmail(
-                        message_id=message_id or f"apple-mail-{i}",
-                        sender=sender or None,
-                        subject=subject or None,
-                        received_at=received_at or None,
-                        body_text=body_text,
-                        raw_content=raw_source.encode('utf-8'),
-                        source_id=message_id or f"apple-mail-{i}",
-                        source_type='apple_mail'
-                    ))
-
-            except (subprocess.CalledProcessError, subprocess.TimeoutExpired):
-                break
-
-        return raw_emails
-
-    @staticmethod
-    def _parse_applescript_list(output: str) -> list[str]:
-        """Parse AppleScript list output (very basic implementation)."""
-        # Remove outer braces and split by comma
-        # This is simplified - real implementation needs proper parsing
-        output = output.strip()
-        if output.startswith('{') and output.endswith('}'):
-            output = output[1:-1]
-
-        # Split by comma but respect quoted strings
-        parts = []
-        current = []
-        in_quotes = False
-
-        for char in output:
-            if char == '"':
-                in_quotes = not in_quotes
-            elif char == ',' and not in_quotes:
-                parts.append(''.join(current).strip().strip('"'))
-                current = []
-                continue
-            current.append(char)
-
-        if current:
-            parts.append(''.join(current).strip().strip('"'))
-
-        return parts
-
-    def mark_as_processed(self, source_id: str) -> None:
-        """Mark email as read in Apple Mail."""
-        script = f'''
-        tell application "Mail"
-            set targetMessages to messages of inbox whose message id is "{source_id}"
-            repeat with msg in targetMessages
-                set read status of msg to true
-            end repeat
-        end tell
-        '''
-
-        try:
-            subprocess.run(
-                ['osascript', '-e', script],
-                capture_output=True,
-                check=True,
-                timeout=10
-            )
-        except (subprocess.CalledProcessError, subprocess.TimeoutExpired) as e:
-            print(f"Error marking email as read: {e}")
-
-
-# ============================================================================
 # Factory function
 # ============================================================================
 
@@ -346,10 +204,5 @@ def get_available_sources() -> list[EmailSource]:
         gmail = GmailSource()
         if gmail.is_configured():
             sources.append(gmail)
-
-    # Try Apple Mail
-    apple_mail = AppleMailSource()
-    if apple_mail.is_configured():
-        sources.append(apple_mail)
 
     return sources

@@ -4,7 +4,7 @@ This repository contains a minimal email-driven project management helper writte
 
 ## Features
 
-- **Auto-fetch emails** from Gmail and Apple Mail (macOS)
+- **Auto-fetch emails** from Gmail
 - Store projects and incoming email metadata in a lightweight SQLite database
 - Triage emails interactively or via web dashboard:
   1. Assign the message to an existing project
@@ -25,11 +25,7 @@ This repository contains a minimal email-driven project management helper writte
    pip install -r requirements.txt
    ```
 
-   This installs Flask (for web UI) and Gmail API libraries. If you don't need Gmail integration, you can install just Flask:
-
-   ```bash
-   pip install flask
-   ```
+   This installs Flask (for web UI) and Gmail API libraries.
 
 3. (Optional) Set a custom storage directory by exporting `PROJECT_MANAGER_HOME=/path/to/storage`. Otherwise data lives in `~/.project_manager/`.
 
@@ -41,9 +37,7 @@ This repository contains a minimal email-driven project management helper writte
 
 The first command invocation initializes the SQLite database and required folders automatically.
 
-## Email Source Setup
-
-### Gmail Integration
+## Gmail Setup
 
 1. **Enable Gmail API in Google Cloud Console:**
    - Go to https://console.cloud.google.com/
@@ -52,7 +46,7 @@ The first command invocation initializes the SQLite database and required folder
    - Create OAuth 2.0 credentials (Desktop app type)
    - Download the credentials JSON file
 
-2. **Configure Intuition:**
+2. **Configure the app:**
    ```bash
    # Save credentials to ~/.project_manager/gmail_credentials.json
    cp ~/Downloads/credentials.json ~/.project_manager/gmail_credentials.json
@@ -65,10 +59,6 @@ The first command invocation initializes the SQLite database and required folder
    ```bash
    python -m project_manager.cli list-sources
    ```
-
-### Apple Mail Integration (macOS only)
-
-Apple Mail integration works automatically on macOS! No setup required - just make sure Mail.app is running.
 
 ## Typical workflow
 
@@ -120,7 +110,7 @@ python -m project_manager.web
 Then open <http://127.0.0.1:5000/>.
 
 The web interface provides:
-- **One-click email fetching** from Gmail/Apple Mail with configurable batch size
+- **One-click email fetching** from Gmail with configurable batch size
 - Assign emails to existing projects or create new ones on the fly
 - Snooze decisions for a later date (1 day, 1 week, 1 month)
 - Ignore senders entirely

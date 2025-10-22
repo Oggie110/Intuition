@@ -120,9 +120,7 @@ def handle_list_sources() -> None:
     sources = get_available_sources()
     if not sources:
         print("No email sources configured.")
-        print("\nAvailable sources:")
-        print("  - Gmail: Run 'setup-gmail' to configure")
-        print("  - Apple Mail: Automatically detected on macOS")
+        print("\nRun 'setup-gmail' to configure Gmail.")
         return
 
     print("Configured email sources:")

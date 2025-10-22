@@ -1,0 +1,39 @@
+{% extends "base.html" %}
+
+{% block content %}
+  <section>
+    <h1>Contacts</h1>
+    <p class="muted">All people you've communicated with across projects.</p>
+  </section>
+
+  <section>
+    {% if contacts %}
+      <div class="card">
+        <table>
+          <thead>
+            <tr>
+              <th scope="col">Name</th>
+              <th scope="col">Email</th>
+              <th scope="col">Phone</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for contact in contacts %}
+              <tr>
+                <td>
+                  <a href="{{ url_for('contact_detail', contact_id=contact.id) }}" style="text-decoration: none; color: inherit;">
+                    <strong>{{ contact.name or "(no name)" }}</strong>
+                  </a>
+                </td>
+                <td>{{ contact.email or "-" }}</td>
+                <td>{{ contact.phone or "-" }}</td>
+              </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    {% else %}
+      <p class="muted">No contacts yet. Fetch some emails to get started.</p>
+    {% endif %}
+  </section>
+{% endblock %}
