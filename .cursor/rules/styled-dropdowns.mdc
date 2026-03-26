@@ -1,0 +1,24 @@
+---
+description: Require fully styled dropdown/select controls
+globs: web/**/*.{ts,tsx,js,jsx,css}
+alwaysApply: false
+---
+
+# Styled Dropdowns Required
+
+- Never ship default browser dropdown styling in the web app.
+- Every `<select>` must use the design system: explicit border, background, typography, spacing, focus style, and disabled style.
+- Use `appearance-none` and provide a custom chevron indicator so Apple/native UI chrome does not appear.
+- Dropdown containers should visually match adjacent controls (buttons/inputs) in shadow, border thickness, and color tokens.
+
+## Example
+
+```tsx
+<div className="relative">
+  <select className="appearance-none border-2 border-ink bg-paper px-3 py-2 pr-10 shadow-[4px_4px_0_0_#111111]">
+    <option>Example</option>
+  </select>
+  <span className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2">▾</span>
+</div>
+```
+
