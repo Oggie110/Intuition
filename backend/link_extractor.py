@@ -1,8 +1,11 @@
 from __future__ import annotations
 
+import ipaddress
 import re
+import socket
 from dataclasses import dataclass
 from typing import Optional
+from urllib.parse import urlparse
 
 import httpx
 from bs4 import BeautifulSoup
@@ -53,7 +56,67 @@ def pick_link_url(body: str) -> Optional[str]:
     return None
 
 
+def _is_private_or_local_target(url: str) -> bool:
+    try:
+        parsed = urlparse(url)
+    except Exception:
+        return True
+
+    if parsed.scheme not in {"http", "https"}:
+        return True
+
+    host = parsed.hostname
+    if not host:
+        return True
+
+    # Reject obvious local hostnames.
+    lowered_host = host.lower()
+    if lowered_host in {"localhost", "localhost.localdomain"} or lowered_host.endswith(".local"):
+        return True
+
+    # If host is an IP literal, validate directly.
+    try:
+        ip = ipaddress.ip_address(host)
+        return (
+            ip.is_private
+            or ip.is_loopback
+            or ip.is_link_local
+            or ip.is_multicast
+            or ip.is_reserved
+            or ip.is_unspecified
+        )
+    except ValueError:
+        pass
+
+    # Resolve DNS and reject if any resolved address is private/local.
+    try:
+        infos = socket.getaddrinfo(host, parsed.port or 443, type=socket.SOCK_STREAM)
+    except Exception:
+        # Fail closed for unknown/unresolvable hosts.
+        return True
+
+    for info in infos:
+        sockaddr = info[4]
+        resolved_ip_str = sockaddr[0]
+        try:
+            resolved_ip = ipaddress.ip_address(resolved_ip_str)
+        except ValueError:
+            continue
+        if (
+            resolved_ip.is_private
+            or resolved_ip.is_loopback
+            or resolved_ip.is_link_local
+            or resolved_ip.is_multicast
+            or resolved_ip.is_reserved
+            or resolved_ip.is_unspecified
+        ):
+            return True
+    return False
+
+
 def fetch_and_extract(url: str, max_chars: int = 5000) -> LinkedContent:
+    if _is_private_or_local_target(url):
+        return LinkedContent(linked_url=url, linked_title=None, linked_content="")
     try:
         with httpx.Client(
             timeout=httpx.Timeout(connect=5.0, read=15.0, write=10.0, pool=10.0),

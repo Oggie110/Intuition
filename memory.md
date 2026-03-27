@@ -40,6 +40,7 @@ Open `http://127.0.0.1:3010`. The browser calls **`/api/proxy/...`** only (`web/
 - **Repo-root `.env`** is loaded by the backend on startup (`python-dotenv`, `override=True` so file values win over stale shell env).
 - **Do not commit secrets.** `.gitignore` excludes `.env` and `data/`.
 - Common variables: `ANTHROPIC_API_KEY`; model overrides such as `ANTHROPIC_MODEL`, `ANTHROPIC_CHAT_MODEL`, `ANTHROPIC_DIGEST_MODEL` (e.g. Sonnet-class models for enrichment, chat, digest).
+- Hardening variables: `INTUITION_API_KEY` (requires `x-api-key` on all `/api/*` routes), `INTUITION_EXPOSE_SYSTEM_INFO=true` (shows local paths in `/api/status`; default is redacted).
 - Bird CLI is expected at **`~/bin/bird`** with credentials under `~/.config/bird/` as in the PRD.
 
 ## Architecture shortcuts

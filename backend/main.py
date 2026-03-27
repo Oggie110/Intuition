@@ -1,9 +1,12 @@
 from __future__ import annotations
 
+import os
 from pathlib import Path
 
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi import Request
+from fastapi.responses import JSONResponse
 from pydantic import BaseModel, Field
 from dotenv import load_dotenv
 
@@ -35,6 +38,23 @@ _CONN = None
 _CONFIG = None
 
 
+def _as_bool(value: str | None) -> bool:
+    if value is None:
+        return False
+    return value.strip().lower() in {"1", "true", "yes", "on"}
+
+
+@app.middleware("http")
+async def _optional_api_key_guard(request: Request, call_next):
+    # Optional hardening: if INTUITION_API_KEY is set, all /api routes require it.
+    required_key = os.environ.get("INTUITION_API_KEY")
+    if request.url.path.startswith("/api/") and required_key:
+        supplied = request.headers.get("x-api-key")
+        if supplied != required_key:
+            return JSONResponse(status_code=401, content={"detail": "Unauthorized"})
+    return await call_next(request)
+
+
 @app.on_event("startup")
 def _startup() -> None:
     global _CONN, _CONFIG
@@ -47,6 +67,7 @@ def _startup() -> None:
 
 @app.get("/api/status")
 def status() -> dict:
+    expose_system_info = _as_bool(os.environ.get("INTUITION_EXPOSE_SYSTEM_INFO"))
     db_path = str(_CONFIG.db_path) if _CONFIG else str(Path("data") / "intuition.db")
     bird_path = str(bird_client.default_bird_path())
     bird_installed = bird_client.is_installed()
@@ -64,10 +85,10 @@ def status() -> dict:
 
     return {
         "ok": True,
-        "db": {"path": db_path},
+        "db": {"path": db_path if expose_system_info else None},
         "bird": {
             "installed": bird_installed,
-            "path": bird_path,
+            "path": bird_path if expose_system_info else None,
             "available": bool(who) if bird_installed else False,
             "whoami": who,
         },

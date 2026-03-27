@@ -33,6 +33,8 @@ uvicorn backend.main:app --reload --host 127.0.0.1 --port 8010
 
 - `ANTHROPIC_API_KEY` — required for enrichment, chat, and digest generation
 - Optional: `ANTHROPIC_MODEL`, `ANTHROPIC_CHAT_MODEL`, `ANTHROPIC_DIGEST_MODEL` to override defaults
+- Optional hardening: `INTUITION_API_KEY` to require `x-api-key` on all `/api/*` routes
+- Optional hardening: `INTUITION_EXPOSE_SYSTEM_INFO=true` to expose local file paths in `/api/status` (defaults to redacted)
 
 ## Web
 
