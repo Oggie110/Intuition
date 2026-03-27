@@ -33,7 +33,13 @@ cd web && pnpm dev --port 3010
 
 Open `http://127.0.0.1:3010`. The browser calls **`/api/proxy/...`** only (`web/lib/api.ts`). The Next.js route `web/app/api/proxy/[...path]/route.ts` forwards to the real API; set **`BACKEND_API_BASE`** or **`NEXT_PUBLIC_API_BASE`** (e.g. in `web/.env.local`) to `http://127.0.0.1:8010` if your backend is not on the default host/port.
 
-**Note:** `README.md` may still mention port `8000`; this project has often used **8010** for the API and **3010** for Next.js when default ports were busy.
+**One-command startup**:
+
+```bash
+make dev-up
+```
+
+This starts backend (`:8010`) and frontend (`:3010`) together from repo root.
 
 ## Environment
 

@@ -45,3 +45,13 @@ pnpm dev --port 3010
 ```
 
 Open `http://127.0.0.1:3010`. The app calls **`/api/proxy/...`** on the Next.js origin; the proxy forwards to the FastAPI backend. By default the proxy targets `http://127.0.0.1:8010`. Override with **`BACKEND_API_BASE`** or **`NEXT_PUBLIC_API_BASE`** in `web/.env.local` if your API runs elsewhere.
+
+## One-command dev start
+
+After initial setup (`.venv` created and `web/node_modules` installed), run:
+
+```bash
+make dev-up
+```
+
+This starts backend (`:8010`) and frontend (`:3010`) together and stops both on `Ctrl+C`.
