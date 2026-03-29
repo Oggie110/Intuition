@@ -14,6 +14,7 @@ Persistent notes for humans and agents working in this repo. Update when archite
 | SQL migrations | `backend/migrations/` |
 | SQLite DB (default) | `data/intuition.db` (gitignored under `data/`) |
 | Next.js app | `web/` |
+| Digest home route | `web/app/page.tsx` (server shell) → `digest-home-entry.tsx` (client `dynamic`, `ssr: false`) → `home-client.tsx` (dashboard UI) |
 | Product requirements | `tasks/prd-bookmark-intelligence.md` |
 | Cursor rule: styled selects | `.cursor/rules/styled-dropdowns.mdc` |
 
@@ -64,3 +65,5 @@ Default remote: `origin` → `https://github.com/Oggie110/Intuition.git` (verify
 ## When editing UI
 
 Match the existing editorial palette (`globals.css` tokens) and follow `.cursor/rules/styled-dropdowns.mdc` for `<select>` styling.
+
+Base `h1`–`h3` rules in `globals.css` use extra line-height so **Syne** extrabold headings do not clip descenders (e.g. `g`).

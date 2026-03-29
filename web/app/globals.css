@@ -20,6 +20,16 @@ body {
     BlinkMacSystemFont, "Segoe UI", sans-serif;
 }
 
+/* Syne at extrabold weights can clip descenders (g, y, p) if line-height is too tight. */
+@layer base {
+  h1,
+  h2,
+  h3 {
+    line-height: calc(1.28em + 0.45rem);
+    overflow: visible;
+  }
+}
+
 ::selection {
   background: var(--accent);
   color: var(--ink);
